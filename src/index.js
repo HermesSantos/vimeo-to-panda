@@ -23,7 +23,13 @@ async function saveVideoMapping(vimeoVideoId, pandaVideoId, pandaWebsocketUrl, t
       title = VALUES(title),
       updated_at = CURRENT_TIMESTAMP
   `;
-  await pool.execute(sql, [vimeoVideoId, pandaVideoId, pandaWebsocketUrl, title]);
+  await pool.execute(sql, [
+    formatVimeoUrl(vimeoVideoId) ?? null,
+    pandaVideoId ?? null,
+    pandaWebsocketUrl ?? null,
+    title ?? null
+  ]);
+
   console.log(`[DB] Mapeamento salvo: ${vimeoVideoId} -> ${pandaVideoId}`);
 }
 
@@ -127,7 +133,8 @@ async function createPandaFolder(name, parentFolderId = null) {
 /**
  * Upload do vídeo para Panda - URL fixa e cliente axios padrão
  */
-async function uploadVideoToPanda(folderId, title, description, videoUrl) {
+// Função de upload para o Panda
+async function uploadVideoToPanda(folderId, title, description, videoUrl, vimeoVideoId) {
   const payload = {
     folder_id: folderId,
     title,
@@ -140,7 +147,17 @@ async function uploadVideoToPanda(folderId, title, description, videoUrl) {
       const res = await axios.post(PANDA_UPLOAD_URL, payload, {
         headers: { Authorization: PANDA_TOKEN },
       });
+
       console.log(`[Panda] Vídeo "${title}" enviado com sucesso!`);
+
+      // Extraindo dados relevantes da resposta
+      const pandaVideoId = res.data?.id || null;
+      const pandaWebsocketUrl = res.data?.websocket_url || null;
+
+      // Salvando no banco
+      console.log({vimeoVideoId, pandaVideoId, pandaWebsocketUrl, title})
+      await saveVideoMapping(vimeoVideoId, pandaVideoId, pandaWebsocketUrl, title);
+
       return res.data;
     } catch (e) {
       console.error(`[Panda] Erro upload vídeo "${title}" (tentativa ${attempt}):`, e.message);
@@ -184,7 +201,8 @@ async function processVideosInFolder(vimeoFolder, pandaFolderId) {
         continue;
       }
 
-      await uploadVideoToPanda(pandaFolderId, title, description, downloadUrl);
+      console.log({"uploadvideoid": video.uri})
+      await uploadVideoToPanda(pandaFolderId, title, description, downloadUrl, video.uri);
     }
 
     url = data.paging?.next || null;
@@ -260,7 +278,13 @@ export async function run() {
   }
 }
 
-// Para rodar manualmente, importe este módulo no REPL node ou chame run() explicitamente.
-// Exemplo:
-// import { run } from './vimeo-to-panda.js'
+function formatVimeoUrl(path) {
+  const match = path.match(/^\/videos\/(\d+)$/);
+  if (!match) {
+    throw new Error("Formato inválido. Esperado: /videos/{id}");
+  }
+  const videoId = match[1];
+  return `https://player.vimeo.com/video/${videoId}`;
+}
+
 await run()
