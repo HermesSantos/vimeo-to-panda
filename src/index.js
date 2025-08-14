@@ -60,7 +60,21 @@ async function safeGet(client, url, config = {}, retry = 3) {
       const res = await client.get(url, config);
       return res.data;
     } catch (e) {
+      const status = e.response?.status;
       console.error(`[GET][Attempt ${attempt}] Error fetching ${url}:`, e.message);
+
+      if (status === 429) {
+        // Tempo de espera vindo do header ou tempo crescente baseado na tentativa
+        const wait =
+          e.response.headers?.['retry-after']
+            ? parseInt(e.response.headers['retry-after'], 10) * 1000
+            : 2000 * attempt;
+
+        console.warn(`⚠️ Rate limit (429) — aguardando ${wait / 1000}s antes de tentar novamente...`);
+        await new Promise(r => setTimeout(r, wait));
+        continue;
+      }
+
       if (attempt === retry) throw e;
       await new Promise(r => setTimeout(r, 1000 * attempt));
     }
@@ -73,7 +87,20 @@ async function safePost(client, url, data = {}, config = {}, retry = 3) {
       const res = await client.post(url, data, config);
       return res.data;
     } catch (e) {
+      const status = e.response?.status;
       console.error(`[POST][Attempt ${attempt}] Error posting to ${url}:`, e.message);
+
+      if (status === 429) {
+        const wait =
+          e.response.headers?.['retry-after']
+            ? parseInt(e.response.headers['retry-after'], 10) * 1000
+            : 2000 * attempt;
+
+        console.warn(`⚠️ Rate limit (429) — aguardando ${wait / 1000}s antes de tentar novamente...`);
+        await new Promise(r => setTimeout(r, wait));
+        continue;
+      }
+
       if (attempt === retry) throw e;
       await new Promise(r => setTimeout(r, 1000 * attempt));
     }
@@ -201,6 +228,11 @@ async function processVideosInFolder(vimeoFolder, pandaFolderId) {
         continue;
       }
 
+      if (await videoExistsInDB(video.uri)) {
+        console.warn(`[Skip] Vídeo já existe no Panda: ${title}`)
+        continue
+      }
+
       console.log({"uploadvideoid": video.uri})
       await uploadVideoToPanda(pandaFolderId, title, description, downloadUrl, video.uri);
     }
@@ -285,6 +317,12 @@ function formatVimeoUrl(path) {
   }
   const videoId = match[1];
   return `https://player.vimeo.com/video/${videoId}`;
+}
+
+async function videoExistsInDB(vimeoVideoId) {
+  const sql = 'SELECT 1 FROM vimeo_panda_videos WHERE vimeo_video_id = ? LIMIT 1';
+  const [rows] = await pool.execute(sql, [formatVimeoUrl(vimeoVideoId)]);
+  return rows.length > 0;
 }
 
 await run()
