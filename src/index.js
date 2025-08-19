@@ -13,6 +13,20 @@ const pool = mysql.createPool({
   database: process.env.MYSQL_DB,
 });
 
+const VIMEO_TOKEN = process.env.VIMEO_TOKEN;
+const PANDA_TOKEN = process.env.PANDA_TOKEN;
+const VIMEO_URL_BASE = process.env.VIMEO_URL_BASE;
+const VIMEO_USER_ID = process.env.VIMEO_USER_ID;
+
+const PANDA_API_BASE = 'https://api-v2.pandavideo.com.br';
+const PANDA_UPLOAD_URL = 'https://import.pandavideo.com:9443/videos';
+
+const axiosVimeo = axios.create({
+  baseURL: VIMEO_URL_BASE,
+  headers: { Authorization: `Bearer ${VIMEO_TOKEN}` },
+  timeout: 15000,
+})
+
 async function saveVideoMapping(vimeoVideoId, pandaVideoId, pandaWebsocketUrl, title) {
   const sql = `
     INSERT INTO vimeo_panda_videos (vimeo_video_id, panda_video_id, panda_websocket_url, title)
@@ -30,23 +44,8 @@ async function saveVideoMapping(vimeoVideoId, pandaVideoId, pandaWebsocketUrl, t
     title ?? null
   ]);
 
-  console.log(`[DB] Mapeamento salvo: ${vimeoVideoId} -> ${pandaVideoId}`);
+  console.log(`[DB] Mapeamento salvo: ${vimeoVideoId} -> ${pandaVideoId}`)
 }
-
-
-const VIMEO_TOKEN = process.env.VIMEO_TOKEN;
-const PANDA_TOKEN = process.env.PANDA_TOKEN;
-const VIMEO_URL_BASE = process.env.VIMEO_URL_BASE;
-const VIMEO_USER_ID = process.env.VIMEO_USER_ID;
-
-const PANDA_API_BASE = 'https://api-v2.pandavideo.com.br';
-const PANDA_UPLOAD_URL = 'https://import.pandavideo.com:9443/videos';
-
-const axiosVimeo = axios.create({
-  baseURL: VIMEO_URL_BASE,
-  headers: { Authorization: `Bearer ${VIMEO_TOKEN}` },
-  timeout: 15000,
-});
 
 const axiosPandaAPI = axios.create({
   baseURL: PANDA_API_BASE,
