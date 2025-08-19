@@ -228,13 +228,18 @@ async function processVideosInFolder(vimeoFolder, pandaFolderId) {
         continue;
       }
 
-      if (await videoExistsInDB(video.uri)) {
-        console.warn(`[Skip] Vídeo já existe no Panda: ${title}`)
-        continue
+      // tenta achar no Panda um vídeo com o mesmo título ou URL original
+      const existingPandaVideo = await findPandaVideoByVimeoUrl(downloadUrl);
+
+      if (existingPandaVideo) {
+        console.log(`[Match] Vídeo encontrado no Panda: ${title} -> ${existingPandaVideo.id}`);
+        await saveVideoMapping(video.uri, existingPandaVideo.id, existingPandaVideo.websocket_url, title);
+        continue;
       }
 
-      console.log({"uploadvideoid": video.uri})
-      await uploadVideoToPanda(pandaFolderId, title, description, downloadUrl, video.uri);
+      // Se não achar, aí sim decide se quer fazer upload ou não
+      console.warn(`[No Match] Vídeo não encontrado no Panda: ${title}`);
+      // await uploadVideoToPanda(...)
     }
 
     url = data.paging?.next || null;
